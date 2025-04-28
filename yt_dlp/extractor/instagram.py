@@ -110,6 +110,16 @@ class InstagramBaseIE(InfoExtractor):
         vcodec = product_media.get('video_codec')
         dash_manifest_raw = product_media.get('video_dash_manifest')
         videos_list = product_media.get('video_versions')
+        image_versions = product_media.get('image_versions2')
+        if image_versions:
+            formats = image_versions.get('candidates') or []
+            return {
+                'id': media_id,
+                'duration': 0,
+                'formats': formats,
+                'media_type': 'image'
+            }
+
         if not (dash_manifest_raw or videos_list):
             return {}
 
@@ -464,6 +474,8 @@ class InstagramIE(InstagramBaseIE):
             if description is not None:
                 description = lowercase_escape(description)
 
+
+
         video_url = media.get('video_url')
         if not video_url:
             nodes = traverse_obj(media, ('edge_sidecar_to_children', 'edges', ..., 'node'), expected_type=dict) or []
@@ -471,13 +483,21 @@ class InstagramIE(InstagramBaseIE):
                 return self.playlist_result(
                     self._extract_nodes(nodes, True), video_id,
                     format_field(username, None, 'Post by %s'), description)
-            raise ExtractorError('There is no video in this post', expected=True)
-
-        formats = [{
-            'url': video_url,
-            'width': self._get_dimension('width', media, webpage),
-            'height': self._get_dimension('height', media, webpage),
-        }]
+            display_resources = media.get('display_resources')
+            if not display_resources:
+                raise ExtractorError('There is no video in this post', expected=True)
+            else:
+                formats = [{
+                    'url': node.get('src'),
+                    'width': node.get('config_width'),
+                    'height': node.get('config_height'),
+                } for node in display_resources]
+        else:
+            formats = [{
+                'url': video_url,
+                'width': self._get_dimension('width', media, webpage),
+                'height': self._get_dimension('height', media, webpage),
+            }]
         dash = traverse_obj(media, ('dash_info', 'video_dash_manifest'))
         if dash:
             formats.extend(self._parse_mpd_formats(self._parse_xml(dash, video_id), mpd_id='dash'))
